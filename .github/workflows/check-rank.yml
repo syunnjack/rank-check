@@ -1,0 +1,78 @@
+name: Check rank
+
+# 自店の順位を毎日調べる。
+#
+# **相手のサイトに4秒あけて叩く。** 人が手で検索して順位を見る代わりを
+# する道具なので、それより速くする理由がない。
+
+on:
+  schedule:
+    - cron: '0 22 * * *'   # 毎日 07:00 JST
+  workflow_dispatch:
+    inputs:
+      max_pages:
+        description: '1キーワードあたり何ページまで見るか'
+        type: string
+        default: '2'
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 順位を調べる
+        env:
+          MAX_PAGES: ${{ inputs.max_pages || '2' }}
+          PYTHONIOENCODING: utf-8
+        run: python scripts/check_rank.py
+
+      - name: 変化があれば commit する
+        id: commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add data/
+
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "順位に変化はありませんでした。"
+            exit 0
+          fi
+
+          git commit -m "順位を記録する"
+          pushed=false
+          for attempt in 1 2 3 4 5; do
+            if git pull --rebase --autostash origin main && git push; then
+              pushed=true
+              break
+            fi
+            echo "push が競合しました（${attempt}回目）。待って試します。"
+            sleep $((15 * attempt))
+          done
+          if [ "$pushed" != true ]; then
+            echo "push できませんでした。" >&2
+            exit 1
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+  # bot の push では deploy が起動しないため、ここから明示的に呼ぶ。
+  deploy:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    uses: ./.github/workflows/deploy.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

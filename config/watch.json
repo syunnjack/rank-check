@@ -1,0 +1,15 @@
+{
+  "_note": "調べる店とキーワード。shops のキーはモール、値は店コード（楽天は shop_code、Yahoo は seller id）。",
+  "sites": [
+    {
+      "name": "見本（あとで自分の店に置き換える）",
+      "shops": {
+        "rakuten": "kinoco",
+        "yahoo": "mura"
+      },
+      "keywords": [
+        "財布 メンズ"
+      ]
+    }
+  ]
+}
